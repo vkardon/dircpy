@@ -1,0 +1,24 @@
+#!/bin/ksh
+# Sun Feb 20 03:54:03 PST 2022
+# By vkardon
+
+# Function to summarize checksum of all directory files.
+# Note: It cannot be use in production code, but good enough
+# for a puprpose of this test
+check_sum () 
+{
+   dir=$1
+   dirsum=0
+   # Note: We are passing -d argument to xargs to change the delimiter from
+   # any whitespace to the end-of-line character only. This will handle the
+   # case when file name has spaces.
+   #for sum in $(find ${dir} -type f | xargs cksum | awk '{print $1}')
+   for sum in $(find ${dir} -type f | xargs -d$'\n' cksum | awk '{print $1}')
+   do
+      dirsum=$((${sum} + ${dirsum}))
+   done
+   print ${dirsum}
+}
+
+check_sum $1
+
