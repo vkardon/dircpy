@@ -22,9 +22,9 @@ public:
     bool OpenFile(const std::string& fileName) { return OpenFile(fileName, 0, -1); } // To read entire file
     void CloseFile();
 
-    off_t ReadFile(/*out*/ std::string& buf, ssize_t maxSize /* -1 for all */, bool sparse=false)
+    off_t ReadFile(/*out*/ std::string& buf, ssize_t maxSize /* -1 for all */)
     {
-        return (sparse && mMaxSparseBlockSize > 0 ? ReadSparseFile(buf, maxSize) : ReadRegularFile(buf, maxSize));
+        return (mMaxSparseBlockSize > 0 ? ReadSparseFile(buf, maxSize) : ReadRegularFile(buf, maxSize));
     }
 
     bool IsValid() { return mErrMsg.empty(); }

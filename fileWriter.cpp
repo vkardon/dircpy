@@ -96,6 +96,9 @@ size_t FileWriter::WriteFile(const std::string& buf, off_t offset)
 
 bool FileWriter::TruncateFile(size_t size)
 {
+    if(mFileSize == size)
+        return true; // Already at the right size, nothing to truncate
+
     while(ftruncate(mFd, size) != 0)
     {
         if(errno != EINTR)

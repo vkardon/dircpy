@@ -29,6 +29,10 @@ bool DirCopy::Copy(const std::string& srcName, const std::string& destName, size
     mSparseBlockSize = sparseBlockSize;
     bool res = false;
 
+    // Reset progress. Note: If copying a directory, then negative mProgress
+    // will block reporting progress until we get complete mSavedDirAndFiles
+    mProgress = -1;
+
     if((st.st_mode & S_IFMT) == S_IFDIR)
     {
         // Make a destination directory (if doesn't exist)
@@ -93,7 +97,7 @@ void* DirCopy::OnDirectory(const char* dirName, const char* baseName, void* para
     }
 
     // Update saved Dir/Files count and report overall progress
-    UpdateProgress();
+    UpdateDirProgress();
 
     // We have new directory now. Create corresponding DirReaderParam
     DirReaderParam* dirParam = new (std::nothrow) DirReaderParam;
@@ -124,7 +128,11 @@ void DirCopy::OnFile(const char* dirName, const char* baseName, void* param)
 //    std::cout << __func__ << ": destFile=" << destFile << std::endl;
 //    std::cout << std::endl;
 
-    mTotalDirAndFiles++;
+    // Update total Dir/Files count
+    {
+        std::unique_lock<std::mutex> lock(mProgressMutex);
+        mTotalDirAndFiles++;
+    }
 
     std::unique_lock<std::mutex> lock(mFileMutex);
     mFileList.emplace_back(baseName, dirName, dirParam->destDir.c_str());
@@ -166,7 +174,7 @@ bool DirCopy::CopyDir(const std::string& srcDir, const std::string& destDir)
                     }
 
                     // Update saved Dir/Files count and report overall progress
-                    UpdateProgress();
+                    UpdateDirProgress();
 
                     // Are we done?
                     if(mSavedDirAndFiles == mTotalDirAndFiles)
@@ -180,7 +188,6 @@ bool DirCopy::CopyDir(const std::string& srcDir, const std::string& destDir)
     }
 
     // Read directory
-    mProgress = -1; // Don't report progress until we get complete mSavedDirAndFiles
     DirReaderParam dirParam { destDir };
     if(!Read(srcDir, &dirParam))
         Stop(); // Force threads to stop
@@ -189,7 +196,7 @@ bool DirCopy::CopyDir(const std::string& srcDir, const std::string& destDir)
     // Worker threads are still running but we can star report progress
     {
         std::unique_lock<std::mutex> lock(mProgressMutex);
-        mProgress = 0;
+        mProgress = 0; // Start reporting progress
     }
 
     //  Wait for worker threads to complete...
@@ -229,24 +236,21 @@ bool DirCopy::CopyFile(const std::string& srcFile, const std::string& destFile, 
     //static constexpr int maxReadSize = 1024 * 1024 * 3; // 3MB
     static constexpr int maxReadSize = 1024 * 128; // 128KB
     std::string buf;
-    bool sparse = true;
 
     while(reader.HasMore())
     {
         // Read source file
-        off_t dataOffset = reader.ReadFile(buf, maxReadSize, sparse);
-//        size_t thisRead = buf.size();
+        off_t dataOffset = reader.ReadFile(buf, maxReadSize);
 
         // Write destination file
-        //size_t thisWritten = (sparse ? writer.WriteFile(buf, dataOffset) : writer.WriteFile(buf));
-        /*size_t thisWritten =*/ writer.WriteFile(buf, dataOffset);
+        /*size_t written =*/ writer.WriteFile(buf, dataOffset);
         if(!writer.IsValid())
         {
             SetError("FileWriter error '" + writer.GetError() + "'");
             return false;
         }
 
-//        std::cout << __func__ << ": Offset=" << dataOffset << ": read " << thisRead << ", written " << thisWritten << std::endl;
+//        std::cout << __func__ << ": Offset=" << dataOffset << ": read " << buf.size() << ", written " << written << std::endl;
 
         // Update file reading/writing progress
         if(updateProgress)
@@ -255,7 +259,8 @@ bool DirCopy::CopyFile(const std::string& srcFile, const std::string& destFile, 
             if(progress != mProgress)
             {
                 mProgress = progress;
-                std::cout << progress << '%' << (mProgress == 100 ? '\n' : ' ') << std::flush;
+//                std::cout << progress << '%' << (mProgress == 100 ? '\n' : ' ') << std::flush;
+                std::cout << '\r' << "Progress: " << progress << '%' << (mProgress == 100 ? '\n' : ' ') << std::flush;
             }
         }
     }
@@ -266,7 +271,7 @@ bool DirCopy::CopyFile(const std::string& srcFile, const std::string& destFile, 
     return true;
 }
 
-void DirCopy::UpdateProgress()
+void DirCopy::UpdateDirProgress()
 {
     std::unique_lock<std::mutex> lock(mProgressMutex);
 
@@ -280,7 +285,8 @@ void DirCopy::UpdateProgress()
     if(progress != mProgress)
     {
         mProgress = progress;
-        std::cout << progress << '%' << (mProgress == 100 ? '\n' : ' ') << std::flush;
+//        std::cout << progress << '%' << (mProgress == 100 ? '\n' : ' ') << std::flush;
+        std::cout << '\r' << "Progress: " << progress << '%' << (mProgress == 100 ? '\n' : ' ') << std::flush;
     }
 }
 

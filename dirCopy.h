@@ -25,7 +25,7 @@ private:
 
     bool CopyDir(const std::string& srcDir, const std::string& destDir);
     bool CopyFile(const std::string& srcFile, const std::string& destFile, bool updateProgress=false);
-    void UpdateProgress();
+    void UpdateDirProgress();
     inline void SetError(const std::string& err);
     inline void Stop();
 

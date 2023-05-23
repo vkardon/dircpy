@@ -94,7 +94,6 @@ bool FileReader::OpenFile(const std::string& fileName,
     // Validate mmap() result
     if(addr == MAP_FAILED)
     {
-        // victor test
 //        std::cout << "### '" << fileName << "'"
 //                << ": fd=" << fd
 //                << ": readBeginOffset=" << mReadBeginOffset
