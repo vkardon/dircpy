@@ -9,6 +9,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include "threadPool.h"
 
 class DirCopy : public DirReader
 {
@@ -25,37 +26,23 @@ private:
 
     bool CopyDir(const std::string& srcDir, const std::string& destDir);
     bool CopyFile(const std::string& srcFile, const std::string& destFile, bool updateProgress=false);
-    void UpdateDirProgress();
+    void UpdateProgress();
     inline void SetError(const std::string& err);
-    inline void Stop();
 
     struct DirReaderParam
     {
         std::string destDir;
     };
 
-    struct FileInfo
-    {
-        FileInfo(const char* baseName, const char* srcDir, const char* destDir) :
-            mBaseName(baseName), mSrcDir(srcDir), mDestDir(destDir) {}
-        std::string mBaseName;
-        std::string mSrcDir;
-        std::string mDestDir;
-    };
-
 private:
     size_t mSparseBlockSize{0};
-    int mThreadCount{0};
-    std::mutex mProgressMutex;
     size_t mSavedDirAndFiles{0};
     size_t mTotalDirAndFiles{0};
     int mProgress{-1};
-    bool mHasMore{true};
-
-    std::list<FileInfo> mFileList;
-    std::condition_variable mFileCv;
-    std::mutex mFileMutex;
+    std::mutex mProgressMutex;
     std::mutex mErrMsgMutex;
+    ThreadPool mTpool;
+    int mThreadCount{0};
 };
 
 #endif // __DIR_COPY_H__

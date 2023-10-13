@@ -29,8 +29,9 @@ bool DirCopy::Copy(const std::string& srcName, const std::string& destName, size
     mSparseBlockSize = sparseBlockSize;
     bool res = false;
 
-    // Reset progress. Note: If copying a directory, then negative mProgress
-    // will block reporting progress until we get complete mSavedDirAndFiles
+    // Reset progress. 
+    // Note: If copying a directory, then set mProgress negative to block
+    // reporting progress until we get complete mTotalDirAndFiles
     mProgress = -1;
 
     if((st.st_mode & S_IFMT) == S_IFDIR)
@@ -97,7 +98,7 @@ void* DirCopy::OnDirectory(const char* dirName, const char* baseName, void* para
     }
 
     // Update saved Dir/Files count and report overall progress
-    UpdateDirProgress();
+    UpdateProgress();
 
     // We have new directory now. Create corresponding DirReaderParam
     DirReaderParam* dirParam = new (std::nothrow) DirReaderParam;
@@ -121,8 +122,8 @@ void DirCopy::OnDirectoryEnd(const char* /*dirName*/, void* param)
 void DirCopy::OnFile(const char* dirName, const char* baseName, void* param)
 {
     DirReaderParam* dirParam = (DirReaderParam*)param;
-//    std::string destFile = dirParam->destDir + "/" + baseName;
-//    std::string srcFile = std::string(dirName) + "/" + baseName;
+    std::string srcFile = std::string(dirName) + "/" + baseName;
+    std::string destFile = dirParam->destDir + "/" + baseName;
 
 //    std::cout << __func__ << ": srcFile=" << srcFile << std::endl;
 //    std::cout << __func__ << ": destFile=" << destFile << std::endl;
@@ -134,77 +135,40 @@ void DirCopy::OnFile(const char* dirName, const char* baseName, void* param)
         mTotalDirAndFiles++;
     }
 
-    std::unique_lock<std::mutex> lock(mFileMutex);
-    mFileList.emplace_back(baseName, dirName, dirParam->destDir.c_str());
-    mFileCv.notify_one();
+    // Post copy file request to thread pool
+    mTpool.Post([this](const std::string& srcFile, const std::string& destFile)
+    {
+        if(!CopyFile(srcFile, destFile))
+            mTpool.Stop(); // Force other threads to stop
+
+        // Update saved Dir/Files count and report overall progress
+        UpdateProgress();
+        
+    }, srcFile, destFile);
 }
 
 bool DirCopy::CopyDir(const std::string& srcDir, const std::string& destDir)
 {
     // Start worker threads
-    std::vector<std::thread> threads(mThreadCount);
-
-    for(std::thread& thread : threads)
-    {
-        thread = std::thread([&]()
-        {
-            while(mHasMore)
-            {
-                // Wait for a "new file" notification
-                std::unique_lock<std::mutex> lock(mFileMutex);
-                while(mFileList.empty() && mHasMore)
-                    mFileCv.wait(lock);
-
-                // Pop the front element
-                if(!mFileList.empty())
-                {
-                    FileInfo fi = mFileList.front();
-                    mFileList.pop_front();
-//                    std::cout << __func__ << ": >>> Got srcPath=" << p.first << std::endl;
-                    lock.unlock(); // Don't hold the lock so other threads can proceed
-
-                    // Process here...
-                    std::string srcPath = fi.mSrcDir + "/" + fi.mBaseName;
-                    std::string destPath = fi.mDestDir + "/" + fi.mBaseName;
-
-                    if(!CopyFile(srcPath, destPath))
-                    {
-                        Stop(); // Force other threads to stop
-                        break;
-                    }
-
-                    // Update saved Dir/Files count and report overall progress
-                    UpdateDirProgress();
-
-                    // Are we done?
-                    if(mSavedDirAndFiles == mTotalDirAndFiles)
-                    {
-                        Stop();  // Force other threads to stop
-                        break;
-                    }
-                }
-            }
-        }); // End of thread lambda
-    }
+    mTpool.Create(mThreadCount);
 
     // Read directory
     DirReaderParam dirParam { destDir };
     if(!Read(srcDir, &dirParam))
-        Stop(); // Force threads to stop
-
-    // Done reading directory, mSavedDirAndFiles is at its max.
-    // Worker threads are still running but we can star report progress
     {
+        mTpool.Stop(); // Force threads to stop
+    }
+    else
+    {
+        // Done reading directory (mTotalDirAndFiles has a correct max value)
+        // Worker threads are still running, but we can start reporting a progress
         std::unique_lock<std::mutex> lock(mProgressMutex);
-        mProgress = 0; // Start reporting progress
+        mProgress = 0; // Unblock (start) reporting progress
     }
 
-    //  Wait for worker threads to complete...
-    for(std::thread& thread : threads)
-    {
-        thread.join();
-    }
-    threads.clear();
+    // Wait for threads to complete
+    mTpool.Wait();
+    mTpool.Destroy();
 
     // We should only have errors if we failed
     return mErrMsg.empty();
@@ -271,7 +235,7 @@ bool DirCopy::CopyFile(const std::string& srcFile, const std::string& destFile, 
     return true;
 }
 
-void DirCopy::UpdateDirProgress()
+void DirCopy::UpdateProgress()
 {
     std::unique_lock<std::mutex> lock(mProgressMutex);
 
@@ -296,12 +260,5 @@ void DirCopy::SetError(const std::string& err)
     std::unique_lock<std::mutex> lock(mErrMsgMutex);
     if(mErrMsg.empty())
         mErrMsg = err;
-}
-
-void DirCopy::Stop()
-{
-    std::unique_lock<std::mutex> lock(mFileMutex);
-    mHasMore = false;
-    mFileCv.notify_all();
 }
 
