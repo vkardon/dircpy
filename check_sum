@@ -17,7 +17,7 @@ check_sum ()
    do
       dirsum=$((${sum} + ${dirsum}))
    done
-   print ${dirsum}
+   echo ${dirsum}
 }
 
 check_sum $1
