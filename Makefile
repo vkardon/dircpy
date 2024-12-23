@@ -1,6 +1,7 @@
 
 # Executable to build
 EXE = copy 
+DEBUG = true
 
 # Sources
 PROJECT_HOME = .
@@ -31,10 +32,20 @@ else
   CC = g++
 endif
 
-CFLAGS = -std=gnu++17 -Wall -pthread
-#CFLAGS = -std=gnu++11 -Wall -pthread -O3 -s -DNDEBUG
 LD = $(CC)
+
+# Configure Debug or Release build
+CFLAGS = -std=gnu++17 -Wall -pthread
 LDFLAGS = -pthread
+
+ifeq "$(DEBUG)" "true"
+  # Debug build
+  CFLAGS += -g
+else
+  # Release build (-s to remove all symbol table and relocation info)
+  CFLAGS += -O3 -DNDEBUG
+  LDFLAGS += -s
+endif
 
 # Build executable
 $(EXE): $(OBJS)
