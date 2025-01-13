@@ -141,23 +141,32 @@ inline void ThreadPool::Wait()
     mHasMore = false;
     if(mReqCount == 0)
         return; // All requests are processed or never started
-    mCvDone.wait(lock);
 
-    if(mStop)
+    // We use loop to handle spurious wakeups
+    while(true)
     {
-        // If are here because of "Stop" action, then
-        // all pool threads must be already stopped.
-        assert(mStoppedCount == mThreads.size());
+        mCvDone.wait(lock);
 
-        // Wait for all threads to exit
-        JoinThreads();
+        if(mStop)
+        {
+            if(mStoppedCount == mThreads.size())
+            {
+                // If are here because of "Stop" action, then
+                // all threads must be already stopped.
+                assert(mStoppedCount == mThreads.size());
 
-        // Restart threads
-        Create(mThreadCount);
-    }
-    else
-    {
-        assert(mReqCount == 0);
+                // Wait for all threads to exit
+                JoinThreads();
+
+                // Restart threads
+                Create(mThreadCount);
+                break;
+            }
+        }
+        else if(mReqCount == 0)
+        {
+            break;
+        }
     }
 }
 

@@ -35,7 +35,8 @@ bool DirReader::Read(const char* dirName, void* param)
     int n = scandir(dirName, &dirlist, dirfilter, dirsort);
     if(n < 0)
     {
-        mErrMsg = strerror(errno);
+        mErrMsg = std::string("Could not scandir '") + dirName + "' because of: ";
+        mErrMsg += strerror(errno);
         return false;
     }
 
