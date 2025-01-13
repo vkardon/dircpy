@@ -185,6 +185,8 @@ inline void ThreadPool::Destroy()
 inline void ThreadPool::Stop()
 {
     std::unique_lock<std::mutex> lock(mMutex);
+    if(mStop)
+        return; // Already stopped or in a process of stopping
     mStop = true;
     lock.unlock();
     mCv.notify_all();
