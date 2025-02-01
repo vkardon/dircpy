@@ -1,7 +1,7 @@
 //
 // dirWriter.cpp
 //
-#include <experimental/filesystem>  // std::filesystem
+#include <filesystem>               // std::filesystem
 #include <sys/stat.h>               // stat()
 #include <string.h>                 // strerror()
 #include <limits.h>                 // PATH_MAX
@@ -14,7 +14,7 @@
 
 bool DirCopy::Copy(const std::string& srcName, const std::string& destName, size_t sparseBlockSize /*=0*/)
 {
-    // Are we copying file or directory?
+    // Are we copying a file or a directory?
     struct stat st;
     if(stat(srcName.c_str(), &st) < 0)
     {
@@ -38,7 +38,7 @@ bool DirCopy::Copy(const std::string& srcName, const std::string& destName, size
     {
         // Make a destination directory (if doesn't exist)
         std::error_code err;
-        std::experimental::filesystem::create_directories(destName, err);
+        std::filesystem::create_directories(destName, err);
         if(err)
         {
             mErrMsg = "Failed to make '" + destName + "' directory - " + err.message();
@@ -56,7 +56,7 @@ bool DirCopy::Copy(const std::string& srcName, const std::string& destName, size
         std::string fileDirName = dirname(buf);
 
         std::error_code err;
-        std::experimental::filesystem::create_directories(fileDirName, err);
+        std::filesystem::create_directories(fileDirName, err);
         if(err)
         {
             mErrMsg = "Failed to make '" + fileDirName + "' directory - " + err.message();
@@ -89,7 +89,7 @@ void* DirCopy::OnDirectory(const char* dirName, const char* baseName, void* para
 
     // Make destination directory
     std::error_code error;
-    std::experimental::filesystem::create_directories(destDir, error);
+    std::filesystem::create_directories(destDir, error);
     if(error)
     {
         mAbort = true;

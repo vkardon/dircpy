@@ -17,6 +17,7 @@ public:
     void Abort(const std::string& errMsg) { mAbort = true; mErrMsg = errMsg; }
     const std::string& GetError() { return mErrMsg; }
 
+    // For derived class to override
     virtual void* OnDirectory(const char* dirName, const char* baseName, void* param) = 0;
     virtual void OnDirectoryEnd(const char* dirName, void* param) = 0;
     virtual void OnFile(const char* dirName, const char* baseName, void* param) = 0;

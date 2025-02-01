@@ -5,11 +5,8 @@
 #define __DIR_COPY_H__
 
 #include "dirReader.h"
-#include <list>
-#include <mutex>
-#include <condition_variable>
-#include <atomic>
 #include "threadPool.h"
+#include <mutex>
 
 class DirCopy : public DirReader
 {
